@@ -9,6 +9,7 @@ TagManager:
   - Leaves Parent
   - Flower
   - Globals
+  - Code
   layers:
   - Default
   - TransparentFX

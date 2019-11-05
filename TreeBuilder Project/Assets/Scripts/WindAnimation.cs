@@ -29,7 +29,7 @@ public class WindAnimation : MonoBehaviour {
 
 
     public bool rotateBranches = true;
-    public bool rotateLeafParents = true;
+    public bool rotateLeafParents = false;
     public bool rotateLeavesIndividually = true;
 
     private GlobalVariables gV;

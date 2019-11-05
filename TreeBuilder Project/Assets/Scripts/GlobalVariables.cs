@@ -12,7 +12,8 @@ public class GlobalVariables : MonoBehaviour {
     public float timer = 0f;
 
     public Material[] materialsGreen;
-    
+    public Material[] materialsFlower;
+
 
     private void Update()
     {

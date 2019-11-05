@@ -7,13 +7,48 @@ public class RandomSpawner : MonoBehaviour {
     public int gridSizeZ;
 
     public int step = 5;
+
+    public float animationSpeed = 0.1f;
+    public bool makeNew = false;
+
+    public List<GameObject> trees = new List<GameObject>();
+
+
     // Use this for initialization
-    void Start ()
+    void Start()
     {
         StartCoroutine("Plant");
-	}
+    }
+       
 
-   IEnumerator Plant()
+    private void Update()
+    {
+        if(makeNew)
+        {
+            //get rid of old trees
+            for (int i = 0; i < trees.Count; i++)
+            {
+                Destroy(trees[i]);
+            }
+
+            trees.Clear();
+
+            //plant new guys
+            StartCoroutine("Plant");
+
+
+            //tell camera to make new target for smooth lerping
+          //  Camera.main.GetComponent<CameraControl>().makeNewTarget = true;
+
+            //reset flag
+            makeNew = false;
+
+
+        }
+     
+    }
+
+    IEnumerator Plant()
     {
         
 
@@ -24,6 +59,8 @@ public class RandomSpawner : MonoBehaviour {
                 GameObject tree = new GameObject();
                 tree.transform.position = new Vector3(i + Random.Range(-step/2,step/2), 0, j + Random.Range(-step / 2, step / 2));
                 tree.name = "Tree";
+                //choose colour now
+                tree.AddComponent<ColourPicker>().ChooseRandom();
                 tree.AddComponent<ProceduralTree>();
                 tree.AddComponent<WindAnimation>();
 
@@ -38,7 +75,7 @@ public class RandomSpawner : MonoBehaviour {
                 //treeInfo.startingWidth = 2f;
                 //////finish this
 
-                treeInfo.radiusReduceAmount = Random.Range(0.05f, treeInfo.startingWidth*.5f);
+                treeInfo.radiusReduceAmount = Random.Range(0.05f, 0.1f);// treeInfo.startingWidth*.5f);
                 //treeInfo.endingWidth = treeInfo.radiusReduceAmount;//just leave small0.05f
                 treeInfo.stepHeight = Random.Range(0.5f, 3f);
 
@@ -66,8 +103,14 @@ public class RandomSpawner : MonoBehaviour {
                 if (Random.value > 0.5f)
                     treeInfo.randomiseLeafHeight = true;
 
+                trees.Add(tree);
+
                 yield return new WaitForEndOfFrame();
             }
+
+            //tell camera to make new target for smooth lerping
+            Camera.main.GetComponent<CameraControl>().makeNewTarget = true;
+            
         }
 
         yield break;

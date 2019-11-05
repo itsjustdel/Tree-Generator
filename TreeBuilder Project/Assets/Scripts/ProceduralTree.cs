@@ -4,29 +4,40 @@ using UnityEngine;
 
 public class ProceduralTree : MonoBehaviour {
 
+    
 
     public TreeInfo treeInfo;
 
+    //using so we can control how tree builds. Recurring functions interject in a branches building. This list will help us finish
+    //our current branch before starting another one. This is only for aesthetics.
+    private List<BuildInfo> buildInfos = new List<BuildInfo>();
+
     private List<GameObject> branches = new List<GameObject>();
-    
+
 
     public int animationStepBranch = 1;
     public int animationStepLeaves = 1;
 
-   
+
     public GameObject groundPlane;
 
     int frameWait = 0;
     int materialIndexGreen = 0;
 
     GlobalVariables gV;
-    Material green;
-    Material brown;
-    Material yellow;
-    void Start ()
+    Material leavesMat;
+    Material barkMat;
+    Material flowerMat;
+
+    float animationSpeed;
+
+    public bool buildFinished = false;
+    void Start()
     {
         gV = GameObject.FindGameObjectWithTag("Globals").GetComponent<GlobalVariables>();
-        green = gV.materialsGreen[ Random.Range(0, gV.materialsGreen.Length)];
+        animationSpeed = GameObject.FindGameObjectWithTag("Code").GetComponent<RandomSpawner>().animationSpeed;
+
+        ChooseMaterials();
 
         //Randomise values used to define tree shape
         //--to do
@@ -46,34 +57,56 @@ public class ProceduralTree : MonoBehaviour {
 
         //move back
         transform.position = originalPosition;
-        
 
-	}
-    private void Update()
-    {
-        frameWait++;
-        if(frameWait>1)
-        {
-           // enabled = false;
-            GetComponent<WindAnimation>().enabled = true;
-        }
+
     }
 
-	
-    void BuildTree()
-    {   
+    void ChooseMaterials()
+    {
+        leavesMat = gV.materialsGreen[Random.Range(0, gV.materialsGreen.Length)];
+        barkMat= Resources.Load("Brown0") as Material;
+        flowerMat = GetComponent<ColourPicker>().matsAndShades[0].material; ;// gV.materialsFlower[Random.Range(0, gV.materialsFlower.Length)];
 
-       //start the recurring function which will build the tree
-       GameObject branch = BuildBranch( Quaternion.identity, treeInfo.startingWidth, treeInfo.stepHeight, true, gameObject);
-        branch.name = "First Branch";
+    }
+    private void Update()
+    {
         
-        
-        //keep a track of what we have built
-        if (branch != null)
-            branches.Add(branch);
+        if (buildFinished == true)
+        {
+            // enabled = false;
+            GetComponent<WindAnimation>().enabled = true;
+        }
 
-        brown = Resources.Load("Brown0") as Material;
-        CombineSkinnedMeshRenderers(branches,brown);
+        
+    }
+
+    IEnumerator BuildTreeInfos()
+    {
+
+        while (buildInfos.Count > 0)
+        {
+            //build branch then remove from list
+            GameObject branch = BuildBranch(buildInfos[0]);
+            //keep a track of what we have built
+            if (branch != null)
+                branches.Add(branch);
+
+          
+            //remove, we have built this
+            buildInfos.RemoveAt(0);
+
+            //wait an amount of time then build another branch
+            yield return new WaitForSeconds(animationSpeed);               
+            
+
+        }
+
+        //once we get here, fly the flag
+        buildFinished = true;
+
+        //now combine meshes for performance
+       
+        CombineSkinnedMeshRenderers(branches, barkMat);
         List<GameObject> leaves = new List<GameObject>();
         List<GameObject> flowers = new List<GameObject>();
         for (int i = 0; i < branches.Count; i++)
@@ -81,15 +114,54 @@ public class ProceduralTree : MonoBehaviour {
             leaves.Add(branches[i].transform.GetChild(0).gameObject);
             flowers.Add(branches[i].transform.GetChild(1).gameObject);
         }
-        CombineSkinnedMeshRenderers(leaves,green);
+        CombineSkinnedMeshRenderers(leaves, leavesMat);
 
-        yellow= Resources.Load("Yellow0") as Material;
-        CombineSkinnedMeshRenderers(flowers, yellow);
+       
+        CombineSkinnedMeshRenderers(flowers, flowerMat);
 
 
     }
 
-    void CombineSkinnedMeshRenderers(List<GameObject> parents,Material material)
+    void BuildTree()
+    {
+
+        //start the recurring function which will build the tree
+        BuildInfo buildInfo = new BuildInfo();
+        buildInfo.startRotation = Quaternion.identity;
+        buildInfo.currentWidth = treeInfo.startingWidth;
+        buildInfo.currentHeight = treeInfo.stepHeight;
+        buildInfo.splittingBranch = true;
+        buildInfo.branchingPivot = gameObject;
+        //start recurring function
+
+        buildInfos.Add(buildInfo);
+        //GameObject branch = BuildBranch(buildInfo);
+        //branch.name = "First Branch";//
+        StartCoroutine("BuildTreeInfos");
+        return;
+        /*
+        //keep a track of what we have built
+        if (branch != null)
+            branches.Add(branch);
+
+        brown = Resources.Load("Brown0") as Material;
+        CombineSkinnedMeshRenderers(branches, brown);
+        List<GameObject> leaves = new List<GameObject>();
+        List<GameObject> flowers = new List<GameObject>();
+        for (int i = 0; i < branches.Count; i++)
+        {
+            leaves.Add(branches[i].transform.GetChild(0).gameObject);
+            flowers.Add(branches[i].transform.GetChild(1).gameObject);
+        }
+        CombineSkinnedMeshRenderers(leaves, green);
+
+        yellow = Resources.Load("Yellow0") as Material;
+        CombineSkinnedMeshRenderers(flowers, yellow);
+        */
+
+    }
+
+    void CombineSkinnedMeshRenderers(List<GameObject> parents, Material material)
     {
 
         //now we have built all branches, let's combine the renderers to reduce draw calls to the gpu (renders faster bascially)
@@ -101,7 +173,7 @@ public class ProceduralTree : MonoBehaviour {
         List<int> triangles = new List<int>();
         List<Transform> bones = new List<Transform>();
         List<BoneWeight> boneWeights = new List<BoneWeight>();
-        int verticeLimit = 50000;//needs tested
+        int verticeLimit = 500;//needs tested
         int verticeCountBeforeAdding = 0;
         int boneCount = 0;
         for (int i = 0; i < parents.Count; i++)
@@ -189,122 +261,13 @@ public class ProceduralTree : MonoBehaviour {
         combinedSkinnedParent.GetComponent<SkinnedMeshRenderer>().sharedMaterial = material;
     }
 
-    void BuildAnimation()
-    {
-        MeshRenderer[] meshRenderers = GetComponentsInChildren<MeshRenderer>();
-
-
-        for (int i = 0; i < meshRenderers.Length; i++)
-        {
-
-            meshRenderers[i].enabled = false;
-
-        }
-
-        StartCoroutine("AnimationCoroutine");
-
-    }
-
-    IEnumerator AnimationCoroutine()
-    {
-        MeshRenderer[] meshRenderers = GetComponentsInChildren<MeshRenderer>();
-
-        List<MeshRenderer> leaves = new List<MeshRenderer>();
-        for (int i = 0; i < meshRenderers.Length; i ++)
-        {
-            //add leaves to list, we will render these differently from the branches
-            if (meshRenderers[i].name == "Leaf")
-            {
-                leaves.Add(meshRenderers[i]);
-                continue;
-            }
-
-            if (meshRenderers[i].enabled == false)
-            {
-                meshRenderers[i].enabled = true;
-
-                //strip rendererer of it's triangles
-                //save before doing so
-                int[] originalTris = new int[meshRenderers[i].GetComponent<MeshFilter>().mesh.triangles.Length];
-                for (int a = 0; a < originalTris.Length; a++)
-                {
-                    originalTris[a] = meshRenderers[i].GetComponent<MeshFilter>().mesh.triangles[a];
-                }
-
-                //depending on what we are building, we can change the triangle step
-                
-                int step = animationStepBranch;
-                
-                //not step through the triangles and send them to render every animation step
-                List<int> newTris = new List<int>();
-                for (int a = 0; a < originalTris.Length; a+=3)
-                {
-                    newTris.Add(originalTris[a]);
-                    newTris.Add(originalTris[a+1]);
-                    newTris.Add(originalTris[a+2]);
-
-                    meshRenderers[i].GetComponent<MeshFilter>().mesh.triangles = newTris.ToArray();
-
-                    //this makes the branch look like it is growing
-                    if (a % step == 0)                        
-                        yield return new WaitForEndOfFrame();                    
-                }
-            }
-        }
-
-        //Render leaves from bottom up, so the lowest get rendered first
-        //first we need to sort the leaves by height
-        //use the transform attached to mesh renderer for height
-        leaves.Sort(delegate (MeshRenderer a, MeshRenderer b)
-        {
-            return a.transform.position.y
-            .CompareTo(b.transform.position.y);
-        });
-
-        //now run throught the sorted list and turn them on, step through the loop using animation step variable for leaves. Takes too long stepping through individually      
-        //we will also gather leaves in to groups as they render so we can combine the meshes
-       // List<GameObject> batch = new List<GameObject>();
-        int verticesPerBatch = 10000;
-        int currentCount = 0;
-
-        //make an object to hold leaves as they get rendered, ultimately we will batch all the children of this object in to one mesh
-        GameObject batchObject = NewBatchObject();
-
-        for (int i = 0; i < leaves.Count; i++)
-        {
-            leaves[i].enabled = true;
-            leaves[i].transform.parent = batchObject.transform;
-
-            currentCount += leaves[i].GetComponent<MeshFilter>().mesh.vertexCount;
-            if (currentCount > verticesPerBatch || i == leaves.Count-1)
-            {
-                //combine batch object
-                CombineMeshes(batchObject.transform);
-
-                //and make new one if not on the last                
-                if (i < leaves.Count - 1)
-                {
-                    batchObject = NewBatchObject();                   
-                }
-
-                //reset flag
-                currentCount = 0;
-
-            }
-
-            if (i % animationStepLeaves == 0)
-                yield return new WaitForEndOfFrame();
-        }
-
-        yield break;
-    }
 
     private int CompareYPos(GameObject a, GameObject b)
     {
         return System.Math.Sign(a.transform.position.y - b.transform.position.y);
     }
 
-   GameObject NewBatchObject()
+    GameObject NewBatchObject()
     {
         GameObject batchObject = new GameObject();
         batchObject.transform.parent = transform;
@@ -315,21 +278,21 @@ public class ProceduralTree : MonoBehaviour {
         return batchObject;
     }
 
-    GameObject BuildBranch(Quaternion startRotation, float currentWidth, float currentHeight,bool splittingBranch,GameObject branchingPivot)
+    GameObject BuildBranch(BuildInfo buildInfo)
     {
         //recursive function can be passed parameters which will immediately exit the build loop, ew can just sip and return now so we don't get any empty objects
-        if (currentWidth < treeInfo.endingWidth)
+        if (buildInfo.currentWidth < treeInfo.endingWidth)
             return null;
 
         //for each branch we will make a game object with its own mesh renderer and mesh filter
         GameObject branch = new GameObject();
-        branch.transform.position = transform.position;        
-        branch.transform.parent = transform;        
+        branch.transform.position = transform.position;
+        branch.transform.parent = transform;
         branch.name = "Branch";
-    
+
         //components Unity needs to render objects
         MeshFilter meshFilter = branch.AddComponent<MeshFilter>();
-        SkinnedMeshRenderer meshRenderer = branch.AddComponent<SkinnedMeshRenderer>();       
+        SkinnedMeshRenderer meshRenderer = branch.AddComponent<SkinnedMeshRenderer>();
         //mesh data - branches
         Mesh mesh = new Mesh();
         List<Vector3> vertices = new List<Vector3>();
@@ -360,7 +323,7 @@ public class ProceduralTree : MonoBehaviour {
         flowers.transform.parent = branch.transform;
         flowers.name = "Flowers";
         MeshFilter meshFilterFlowers = flowers.AddComponent<MeshFilter>();
-        SkinnedMeshRenderer meshRendererFlowers= flowers.AddComponent<SkinnedMeshRenderer>();
+        SkinnedMeshRenderer meshRendererFlowers = flowers.AddComponent<SkinnedMeshRenderer>();
         //mesh data - leaves
         Mesh flowersMesh = new Mesh();
         List<GameObject> flowersBones = new List<GameObject>();
@@ -369,8 +332,8 @@ public class ProceduralTree : MonoBehaviour {
         List<BoneWeight> flowersWeights = new List<BoneWeight>();
 
         //for loop working out where the branch builds to, also decides if other branches are to split off and start building too 
-        CreateBranchBones(out bones,out pivotsForLeaves,out vertices,out triangles, currentWidth, currentHeight, splittingBranch, branchingPivot, startRotation, bones, pivotsForLeaves, vertices, triangles);
-        
+        CreateBranchBones(out bones, out pivotsForLeaves, out vertices, out triangles, buildInfo.currentWidth, buildInfo.currentHeight, buildInfo.splittingBranch, buildInfo.branchingPivot, buildInfo.startRotation, bones, pivotsForLeaves, vertices, triangles);
+
 
         //now set weights so we can animate tree with a skinned mesh renderer
         List<BoneWeight> weights = SetWeightsBranch(bones, vertices);
@@ -381,7 +344,7 @@ public class ProceduralTree : MonoBehaviour {
             bonesTransforms[i] = bones[i].transform;
         }
 
-        AddMeshInfo(meshFilter, meshRenderer, vertices, triangles, bones, weights, "Brown0");
+        AddMeshInfo(meshFilter, meshRenderer, vertices, triangles, bones, weights, "Branch");
 
         //we can add leaves to the branches
         for (int i = 0; i < pivotsForLeaves.Count; i++)
@@ -390,7 +353,7 @@ public class ProceduralTree : MonoBehaviour {
             leafBones = LeavesCombined(out leafVertices, out leafTriangles, out leavesWeights, pivotsForLeaves[i], leafVertices, leafTriangles, leafBones, leavesWeights);
         }
 
-        AddMeshInfo(meshFilterLeaves, meshRendererLeaves, leafVertices, leafTriangles, leafBones, leavesWeights, "Green0");
+        AddMeshInfo(meshFilterLeaves, meshRendererLeaves, leafVertices, leafTriangles, leafBones, leavesWeights, "Leaves");
 
         //we can add flowers to the leaves
         for (int i = 0; i < leafBones.Count; i++)
@@ -404,13 +367,13 @@ public class ProceduralTree : MonoBehaviour {
             }
         }
 
-        AddMeshInfo(meshFilterFlowers, meshRendererFlowers, flowersVertices, flowersTriangles, flowersBones, flowersWeights,"Yellow0");
+        AddMeshInfo(meshFilterFlowers, meshRendererFlowers, flowersVertices, flowersTriangles, flowersBones, flowersWeights, "Flowers");
 
         for (int i = 0; i < leafBones.Count; i++)
         {
-         //   GameObject c = GameObject.CreatePrimitive(PrimitiveType.Cube);
-          //  c.transform.position = leafBones[i].transform.position;
-          //  c.transform.localScale *= 0.2f;
+            //   GameObject c = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            //  c.transform.position = leafBones[i].transform.position;
+            //  c.transform.localScale *= 0.2f;
         }
 
         return branch;
@@ -418,7 +381,7 @@ public class ProceduralTree : MonoBehaviour {
 
     }
 
-    void CreateBranchBones(out List<GameObject> bonesToReturn,out List<GameObject> pivotsForLeavesToReturn,out List<Vector3> verticesToReturn,out List<int> trianglesToReturn, float currentWidth,float currentHeight,bool splittingBranch,GameObject branchingPivot,Quaternion startRotation,List<GameObject> bonesPassed,List<GameObject> pivotsForLeavesPassed, List<Vector3> verticesPassed, List<int> trianglesPassed)
+    void CreateBranchBones(out List<GameObject> bonesToReturn, out List<GameObject> pivotsForLeavesToReturn, out List<Vector3> verticesToReturn, out List<int> trianglesToReturn, float currentWidth, float currentHeight, bool splittingBranch, GameObject branchingPivot, Quaternion startRotation, List<GameObject> bonesPassed, List<GameObject> pivotsForLeavesPassed, List<Vector3> verticesPassed, List<int> trianglesPassed)
     {
         List<GameObject> bones = new List<GameObject>(bonesPassed);
         List<GameObject> pivotsForLeaves = new List<GameObject>(pivotsForLeavesPassed);
@@ -557,7 +520,17 @@ public class ProceduralTree : MonoBehaviour {
                     //do the same for length
                     float nextBranchLength = j - treeInfo.stepReduce * 2;
                     pivotObject.name = "passed pivot";
-                    GameObject nextBranch = BuildBranch(pivotObject.transform.rotation, nextBranchWidth, nextBranchLength, true, pivotObject);
+
+                    BuildInfo buildInfo = new BuildInfo();
+                    buildInfo.startRotation = pivotObject.transform.rotation;
+                    buildInfo.currentWidth = nextBranchWidth;
+                    buildInfo.currentHeight = nextBranchLength;
+                    buildInfo.splittingBranch = true;
+                    buildInfo.branchingPivot = pivotObject;
+
+                    buildInfos.Add(buildInfo);
+                    //GameObject nextBranch = BuildBranch(buildInfo);
+                    /*
                     //keep a track of what we have built - using?
                     if (nextBranch != null)
                     {
@@ -565,6 +538,7 @@ public class ProceduralTree : MonoBehaviour {
                         nextBranch.transform.parent = transform;//unsure
                         branches.Add(nextBranch);
                     }
+                    */
                 }
             }
 
@@ -597,7 +571,7 @@ public class ProceduralTree : MonoBehaviour {
         trianglesToReturn = triangles;
     }
 
-    void AddMeshInfo(MeshFilter meshFilter, SkinnedMeshRenderer meshRenderer,List<Vector3> vertices,List<int> triangles, List<GameObject> bones, List<BoneWeight> weights,string material)
+    void AddMeshInfo(MeshFilter meshFilter, SkinnedMeshRenderer meshRenderer, List<Vector3> vertices, List<int> triangles, List<GameObject> bones, List<BoneWeight> weights, string type)
     {
         Mesh mesh = new Mesh();
         //flowers
@@ -606,7 +580,12 @@ public class ProceduralTree : MonoBehaviour {
         meshFilter.mesh = mesh;
 
         //give colour/ material
-        meshRenderer.sharedMaterial = Resources.Load(material) as Material;
+        if (type == "Branch")
+            meshRenderer.sharedMaterial = barkMat;// Resources.Load() as Material;
+        else if (type == "Leaves")
+            meshRenderer.sharedMaterial = leavesMat;
+        else if (type == "Flowers")
+            meshRenderer.sharedMaterial = flowerMat;
 
         //now set weights so we can animate tree with a skinned mesh renderer
 
@@ -627,7 +606,6 @@ public class ProceduralTree : MonoBehaviour {
         mesh.RecalculateNormals();
     }
 
-
     List<BoneWeight> SetWeightsBranch(List<GameObject> bones, List<Vector3> vertices)
     {
 
@@ -639,12 +617,12 @@ public class ProceduralTree : MonoBehaviour {
             //for each ring
             for (int j = 0; j < treeInfo.sides + 1; j++)
             {
-                
+
                 //add vertices to bone
 
-               // int ringNumber = i;
+                // int ringNumber = i;
                 //int thisVertice = j;
-                int currentVertice = i * (treeInfo.sides +1) + j;
+                int currentVertice = i * (treeInfo.sides + 1) + j;
                 //add this to current bone = i
                 //weights[currentVertice].boneIndex0 = i;
                 //weights[currentVertice].weight0 = 1;
@@ -656,10 +634,10 @@ public class ProceduralTree : MonoBehaviour {
 
                 if (i == 0)
                 {
-                 //   GameObject c = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                //    c.transform.localScale *= 0.2f;
-                //    c.name = currentVertice.ToString();
-                 //   c.transform.position = vertices[currentVertice];
+                    //   GameObject c = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    //    c.transform.localScale *= 0.2f;
+                    //    c.name = currentVertice.ToString();
+                    //   c.transform.position = vertices[currentVertice];
                 }
             }
         }
@@ -673,7 +651,7 @@ public class ProceduralTree : MonoBehaviour {
         for (int i = 0; i < bindPoses.Length; i++)
         {
             bindPoses[i] = bones[i].worldToLocalMatrix * transform.localToWorldMatrix;
-            
+
         }
         return bindPoses;
     }
@@ -687,7 +665,7 @@ public class ProceduralTree : MonoBehaviour {
         leavesParent.name = "Leaves Parent";
         leavesParent.tag = "Leaves Parent";
         int leavesAmount = Random.Range(4, 4);
-        
+
 
         //now move parent with leaves attached to pivot position
         leavesParent.transform.position = pivotObject.transform.position + transform.position;
@@ -702,7 +680,7 @@ public class ProceduralTree : MonoBehaviour {
         int rotationType = 1;
         //choose which primitive shape to use for leaves - we could add a prefab here, or create more intricate shapes procedurally
         PrimitiveType leafShape = PrimitiveType.Cube;
-         
+
         if (treeInfo.useSphereForLeaf)
             leafShape = PrimitiveType.Sphere;
 
@@ -713,8 +691,8 @@ public class ProceduralTree : MonoBehaviour {
         //temp var in case we want to randomsie it
         float leafSize = treeInfo.leafSize;
         float leafThickness = treeInfo.leafThickness;
-       
-        for (int i = 0; i < 360; i+=360/leavesAmount)
+
+        for (int i = 0; i < 360; i += 360 / leavesAmount)
         {
             //create a cpntaining object which will be used for rotatin, We need this at a nuniform scale, other wise things get wonky if you keep childing
             //non uniform objects to it...
@@ -730,7 +708,7 @@ public class ProceduralTree : MonoBehaviour {
                 leafSize = Random.Range(treeInfo.stepHeight * .2f, treeInfo.stepHeight);//same values as spawner script (link vars)
 
             }
-            if(treeInfo.randomiseLeafHeight)
+            if (treeInfo.randomiseLeafHeight)
             {
                 leafThickness = treeInfo.leafSize / Random.Range(5, 10);
             }
@@ -739,23 +717,23 @@ public class ProceduralTree : MonoBehaviour {
             //we don't need the collider, it will slow down performance
             Destroy(leaf.GetComponent<Collider>());
             leaf.name = "Leaf";
-            leaf.transform.localScale = new Vector3(leafSize,leafThickness,leafSize);
+            leaf.transform.localScale = new Vector3(leafSize, leafThickness, leafSize);
             //create an arm and spin it using the index in the for loop as the angle
             //using quaternions here as it is one easy line to use
-            leaf.transform.position = leavesParent.transform.position +  Quaternion.Euler(0, i, 0) * (Vector3.right * (leafSize*.5f));
+            leaf.transform.position = leavesParent.transform.position + Quaternion.Euler(0, i, 0) * (Vector3.right * (leafSize * .5f));
             //change rotation
-            if(rotationType == 0)
+            if (rotationType == 0)
             {
                 //don't do anything
             }
-            else if( rotationType == 1)
+            else if (rotationType == 1)
             {
                 //rotate only around y axis
                 //add a little wiggle room for the leaf so it isn't always flat 
                 float wiggleAmount = 10f;
-                leaf.transform.rotation = Quaternion.Euler(Random.Range(-wiggleAmount,wiggleAmount), Random.Range(0, 360 / leavesAmount), Random.Range(-wiggleAmount, wiggleAmount));
+                leaf.transform.rotation = Quaternion.Euler(Random.Range(-wiggleAmount, wiggleAmount), Random.Range(0, 360 / leavesAmount), Random.Range(-wiggleAmount, wiggleAmount));
             }
-            else if( rotationType == 2)
+            else if (rotationType == 2)
             {
                 //random
                 leaf.transform.rotation = Random.rotationUniform;
@@ -766,17 +744,17 @@ public class ProceduralTree : MonoBehaviour {
             //attach to parent object
             leaf.transform.parent = holder.transform;
             //roate parent 
-            if(rotationType == 3)
+            if (rotationType == 3)
                 leaf.transform.rotation = pivotObject.transform.rotation;
 
             //add flowers
             bool addFlowers = true;
-            if(addFlowers)
+            if (addFlowers)
             {
                 float flowerProbabilty = .5f;//global
                 if (Random.value > flowerProbabilty)
                 {
-                    
+
                     GameObject flower = GameObject.CreatePrimitive(flowerShape);//global
                     Destroy(flower.GetComponent<Collider>());
                     flower.name = "Flower";
@@ -795,18 +773,19 @@ public class ProceduralTree : MonoBehaviour {
             }
         }
 
-      
+
         //attach leaf to it's branch
         leavesParent.transform.parent = pivotObject.transform;
 
         bool combineLeavesAndFlowers = true; //global - use with rotation seetings, if on we can't rirtae leaves individually and keep nice frames
-        if(combineLeavesAndFlowers)
+        if (combineLeavesAndFlowers)
         {
             CombineMeshes(leavesParent.transform);
         }
 
     }
-    List<GameObject> LeavesCombined(out List<Vector3> verticesToReturn,out List<int> trianglesToReturn,out List<BoneWeight> boneWeightsToReturn, GameObject pivotObject,List<Vector3> verticesPassed,List<int> trianglesPassed, List<GameObject> bonesPassed,List<BoneWeight> boneWeightsPassed)
+
+    List<GameObject> LeavesCombined(out List<Vector3> verticesToReturn, out List<int> trianglesToReturn, out List<BoneWeight> boneWeightsToReturn, GameObject pivotObject, List<Vector3> verticesPassed, List<int> trianglesPassed, List<GameObject> bonesPassed, List<BoneWeight> boneWeightsPassed)
     {
         //method receives a list of bones and positions, creates more bones and position and adds them to the received list, then returns the lists
 
@@ -842,12 +821,12 @@ public class ProceduralTree : MonoBehaviour {
         //temp var in case we want to randomsie it
         float leafSize = treeInfo.leafSize;
         float leafThickness = treeInfo.leafThickness;
-        
-        
+
+
         //make a primitive so we can steal it's vertice data - this could be any shape..
         GameObject leafPrimitive = GameObject.CreatePrimitive(leafShape);//opto can make one in Start and refer to it
 
-        for (int i = 0,j = 0; i < 360; i += 360 / leavesAmount,j++)
+        for (int i = 0, j = 0; i < 360; i += 360 / leavesAmount, j++)
         {
             //change size and shape every leaf?
             if (treeInfo.randomiseLeafSize)
@@ -898,7 +877,7 @@ public class ProceduralTree : MonoBehaviour {
             {
                 leafVertices[a] = new Vector3(leafVertices[a].x * leafSize, leafVertices[a].y * leafThickness, leafVertices[a].z * leafSize);
 
-            
+
                 //add local vertice position to global leaf position, combined with rotation to give the ultimate position
                 tempVertices.Add((leafBone.transform.rotation * leafVertices[a]) + leafBone.transform.position);
 
@@ -906,7 +885,7 @@ public class ProceduralTree : MonoBehaviour {
                 //add bone weight here too
                 BoneWeight bW = new BoneWeight();
                 //point to a bone
-                bW.boneIndex0 = bones.Count-1;
+                bW.boneIndex0 = bones.Count - 1;
                 bW.weight0 = 1f;
                 //vertice index
                 tempBoneWeights.Add(bW);
@@ -920,7 +899,7 @@ public class ProceduralTree : MonoBehaviour {
                 int currentTriangle = leafTriangles[a] + leafVertices.Length * j + verticesPassed.Count;
                 tempTriangles.Add(currentTriangle);
             }
-            
+
 
             //attach to parent object
             leafBone.transform.parent = leavesParent.transform;
@@ -955,12 +934,12 @@ public class ProceduralTree : MonoBehaviour {
         List<BoneWeight> tempBoneWeights = new List<BoneWeight>(boneWeightsPassed);
         List<Vector3> tempVertices = new List<Vector3>(verticesPassed);
         List<int> tempTriangles = new List<int>(trianglesPassed);
-      
+
 
         PrimitiveType flowerShape = PrimitiveType.Cube;
 
         if (treeInfo.useSphereForFlower)
-            flowerShape= PrimitiveType.Sphere;
+            flowerShape = PrimitiveType.Sphere;
 
         //make a primitive so we can steal it's vertice data - this could be any shape..
         GameObject flowerPrimitive = GameObject.CreatePrimitive(flowerShape);
@@ -978,9 +957,9 @@ public class ProceduralTree : MonoBehaviour {
         //using quaternions here as it is one easy line to use
 
         float flowerSize = Random.Range(0.1f, .5f);
-        
+
         flowerBone.transform.parent = pivotObject.transform;
-        flowerBone.transform.position = pivotObject.transform.position + transform.position + Random.rotation * Vector3.right * flowerSize*2;
+        flowerBone.transform.position = pivotObject.transform.position + transform.position + Random.rotation * Vector3.right * flowerSize * 2;
         //rotation?
         //random
         flowerBone.transform.rotation = Random.rotationUniform;
@@ -1030,7 +1009,6 @@ public class ProceduralTree : MonoBehaviour {
 
     }
 
-
     List<Vector3> CreateRing(float width, Vector3 centre)
     {
         //create a ring of points 
@@ -1042,13 +1020,13 @@ public class ProceduralTree : MonoBehaviour {
         float step = 360 / treeInfo.sides;
 
         //Create an arm and then rotate it using the for loop
-        Vector3 arm = Vector3.right * width;         
-        for (float i = 0; i < 360; i+=step) 
+        Vector3 arm = Vector3.right * width;
+        for (float i = 0; i < 360; i += step)
         {
             Vector3 position = Quaternion.Euler(0, i, 0) * arm;
             position += centre;
 
-            
+
             ringPoints.Add(position);
         }
         ringPoints.Add(ringPoints[0]);
@@ -1058,7 +1036,7 @@ public class ProceduralTree : MonoBehaviour {
 
     static void CombineMeshes(Transform transform)
     {
-        
+
         Matrix4x4 myTransform = transform.worldToLocalMatrix;
         Dictionary<Material, List<CombineInstance>> combines = new Dictionary<Material, List<CombineInstance>>();
         MeshRenderer[] meshRenderers = transform.GetComponentsInChildren<MeshRenderer>();
@@ -1077,7 +1055,7 @@ public class ProceduralTree : MonoBehaviour {
             if (filter.sharedMesh == null)
                 continue;
 
-           
+
 
             CombineInstance ci = new CombineInstance();
             ci.mesh = filter.sharedMesh;
@@ -1085,7 +1063,7 @@ public class ProceduralTree : MonoBehaviour {
             ci.transform = myTransform * filter.transform.localToWorldMatrix;
             if (filter.GetComponent<MeshRenderer>() != null)
                 combines[filter.GetComponent<Renderer>().sharedMaterial].Add(ci);
-           
+
         }
 
         foreach (Material m in combines.Keys)
@@ -1106,6 +1084,17 @@ public class ProceduralTree : MonoBehaviour {
 
         }
     }
+
+    public class BuildInfo
+    { 
+        public Quaternion startRotation;
+        public float currentWidth;
+        public float currentHeight;
+        public bool splittingBranch;
+        public GameObject branchingPivot;
+
+    }
+
 }
 
 
