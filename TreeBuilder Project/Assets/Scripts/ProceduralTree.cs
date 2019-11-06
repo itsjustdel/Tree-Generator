@@ -24,7 +24,7 @@ public class ProceduralTree : MonoBehaviour {
     int frameWait = 0;
     int materialIndexGreen = 0;
 
-    GlobalVariables gV;
+    
     Material leavesMat;
     Material barkMat;
     Material flowerMat;
@@ -34,15 +34,15 @@ public class ProceduralTree : MonoBehaviour {
     public bool buildFinished = false;
     void Start()
     {
-        gV = GameObject.FindGameObjectWithTag("Globals").GetComponent<GlobalVariables>();
+    
         animationSpeed = GameObject.FindGameObjectWithTag("Code").GetComponent<RandomSpawner>().animationSpeed;
 
         ChooseMaterials();
 
         //Randomise values used to define tree shape
         //--to do
-        //class which has all the info we need to make unique tree - given to game object when spawning
-        treeInfo = GetComponent<TreeInfo>();
+        //class which has all the info we need to make unique tree -  - reading directly from spawner now
+        treeInfo = GameObject.FindGameObjectWithTag("Code").GetComponent<RandomSpawner>().treeInfo;// GetComponent<TreeInfo>();
 
         //sides needs to be even
         if (treeInfo.sides % 2 != 0)
@@ -63,9 +63,11 @@ public class ProceduralTree : MonoBehaviour {
 
     void ChooseMaterials()
     {
-        leavesMat = gV.materialsGreen[Random.Range(0, gV.materialsGreen.Length)];
+        //materials created when placing new tree in spawner
+        ColourPicker cP = GameObject.FindGameObjectWithTag("Code").GetComponent<ColourPicker>();
+        leavesMat = GameObject.FindGameObjectWithTag("Code").GetComponent<RandomSpawner>().leavesMat;// 
         barkMat= Resources.Load("Brown0") as Material;
-        flowerMat = GetComponent<ColourPicker>().matsAndShades[0].material; ;// gV.materialsFlower[Random.Range(0, gV.materialsFlower.Length)];
+        flowerMat = cP.matsAndShades[0].material; ;// gV.materialsFlower[Random.Range(0, gV.materialsFlower.Length)];
 
     }
     private void Update()
@@ -96,7 +98,9 @@ public class ProceduralTree : MonoBehaviour {
             buildInfos.RemoveAt(0);
 
             //wait an amount of time then build another branch
-            yield return new WaitForSeconds(animationSpeed);               
+            yield return new WaitForSeconds(animationSpeed);
+            
+            //yield return new WaitForEndOfFrame();
             
 
         }

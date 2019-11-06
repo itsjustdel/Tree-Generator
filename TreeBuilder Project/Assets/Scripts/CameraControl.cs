@@ -11,7 +11,12 @@ public class CameraControl : MonoBehaviour
     public bool makeNewTarget;
    public Vector3 start;
     public Vector3 target;
-    // Start is called before the first frame update
+
+    public bool dynamicShadowDistance = true;
+    public float shadowMod = 2f;
+
+    
+        // Start is called before the first frame update
     void Start()
     {
         
@@ -50,21 +55,51 @@ public class CameraControl : MonoBehaviour
         makeNewTarget = false;
     }
     // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
-        if (makeNewTarget)
+       // if (makeNewTarget)
             NewTarget();
 
-        Vector3 lookTarget = spawner.trees[0].transform.position;
+
+        Vector3 lookTarget = Vector3.up * highestY;
+
+        if (Input.GetMouseButtonDown(0))
+        {
+
+        }
+        if (Input.GetMouseButton(0))
+        {
+            
+            float x = Input.GetAxis("Horizontal");
+            x *= 0.5f;
+            transform.parent.rotation *= Quaternion.Euler(0, x, 0);
+            
+        }
+
+
         //lookTarget.y += highestY * .5f;
-        // transform.LookAt(lookTarget);
+
 
         // transform.position = Vector3.Lerp(start, target, Time.deltaTime*0.1f);
         //
-        transform.position =Vector3.Lerp(transform.position,  target + Vector3.up * highestY,Time.deltaTime);
+        transform.position = Vector3.Lerp(transform.position,  target + Vector3.up * highestY,Time.deltaTime);
+
+        Vector3 lookDir = lookTarget;// - transform.position;
+        Quaternion lookQ = Quaternion.LookRotation(-lookDir);
+        //transform.rotation = Quaternion.RotateTowards(transform.rotation, lookQ, .5f);
+        //transform.LookAt(Vector3.Lerp(transform.forward,lookTarget,Time.deltaTime));
+
+        if (dynamicShadowDistance)
+        {
+            UpdateShadowDistance();
+        }
         
     }
     
+    void UpdateShadowDistance()
+    {
+        QualitySettings.shadowDistance = Vector3.Distance(transform.position, Vector3.zero) * shadowMod;
+    }
 
 
 }
