@@ -1,5 +1,5 @@
 # Tree Generator
-Procedurally generated trees using recursive algorithm. New species can be created and new trees with that species can also be created. Trees are rigged with joints as they are created and animated by moving 3D noise over the scene.
+Procedurally generated trees using a recursive algorithm. New species can be created and new trees with that species can also be created. Trees are rigged with joints as they are being created and animated by moving 3D noise over the scene.
 
 ## Media
 ### Screenshots
